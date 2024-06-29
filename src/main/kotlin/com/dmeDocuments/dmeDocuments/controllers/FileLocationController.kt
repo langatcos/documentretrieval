@@ -10,6 +10,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.nio.file.Paths
@@ -72,5 +73,49 @@ class FileLocationController {
         // Example: Directly using the full filename as the folder
 
         return "$folder1/$folder2"
+    }
+
+    // Endpoint to search for files
+    @GetMapping("/search-and-download")
+    fun searchAndDownload(@RequestParam filename: String): ResponseEntity<InputStreamResource> {
+        val searchResults = mutableListOf<File>()
+        val baseFolder = File(basePath)
+
+        // Recursive function to search for file within basePath and its subdirectories
+        searchFilesRecursively(baseFolder, filename, searchResults)
+
+        // If searchResults is not empty, retrieve the first file found and allow download
+        if (searchResults.isNotEmpty()) {
+            val file = searchResults[0]
+
+            try {
+                val fileInputStream = FileInputStream(file)
+                val resource = InputStreamResource(fileInputStream)
+
+                val headers = HttpHeaders()
+                headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=${file.name}")
+
+                return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(resource)
+            } catch (e: FileNotFoundException) {
+                return ResponseEntity.notFound().build()
+            }
+        }
+
+        // If file is not found, return 404 Not Found
+        return ResponseEntity.notFound().build()
+    }
+
+    // Recursive function to search for files
+    private fun searchFilesRecursively(folder: File, searchTerm: String, searchResults: MutableList<File>) {
+        folder.listFiles()?.forEach { file ->
+            if (file.isDirectory) {
+                searchFilesRecursively(file, searchTerm, searchResults)
+            } else if (file.name.equals(searchTerm, ignoreCase = true)) {
+                searchResults.add(file)
+            }
+        }
     }
 }
