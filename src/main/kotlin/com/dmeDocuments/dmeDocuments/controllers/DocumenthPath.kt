@@ -6,7 +6,7 @@ import org.springframework.data.relational.core.mapping.Table
 @Table("documentpath")
 data class DocumenthPath(
     @Column("docref")
-    val docref:String,
+    val docRef:String,
     @Column("path")
     val path:String
 )
