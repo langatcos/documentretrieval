@@ -15,8 +15,8 @@ import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.nio.file.Paths
 
-@RestController
-@CrossOrigin
+
+
 @RequestMapping("/api/files")
 class FileLocationController {
     @Value("\${file.storage.path}")

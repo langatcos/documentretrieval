@@ -25,7 +25,7 @@ class InvoiceDocumentService (val invoiceDocumentRepository: InvoiceDocumentRepo
     }
     @GetMapping("/retrievedocrefbyInvoiceId/{invoiceId}")
     fun getDocrefByInvoiceId(@PathVariable invoiceId:String):ResponseEntity<List<InvoiceDocument>>{
-        val docref=invoiceDocumentRepository.getDocrefByAssessmentId(invoiceId)
+        val docref=invoiceDocumentRepository.getDocrefByInvoiceId(invoiceId)
         return if (docref.isNotEmpty()){
             ResponseEntity.ok(docref)
         }else{
