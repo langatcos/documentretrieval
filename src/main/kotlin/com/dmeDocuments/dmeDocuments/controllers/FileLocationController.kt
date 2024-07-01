@@ -15,7 +15,7 @@ import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.nio.file.Paths
 
-
+//Ommitted as a service as another service that does not need a caluclation of the file location has been created.
 
 @RequestMapping("/api/files")
 class FileLocationController {
