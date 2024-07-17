@@ -153,7 +153,7 @@ class AssessmentService {
         logger.info("Sending request with body: $requestJson")
 
         val request = Request.Builder()
-            .url("http://192.168.100.79/iail/initiate")
+            .url("http://$ialIpServer/iail/initiate")
             .post(body)
             .addHeader("Authorization", "JWT $token")
             .addHeader("Content-Type", "application/json")
