@@ -179,8 +179,6 @@ class AssessmentService {
         }
     }
 
-
-
     fun insertSubmittedClaim(assessmentId: String, invoiceIds: List<String>, connection: java.sql.Connection, requestJson: String) {
         val insertQuery = "INSERT INTO IassistSubmittedClaims (AssessmentId, InvoiceId, RequestJson, TimeSend) VALUES (?, ?, ?, getDate())"
 
