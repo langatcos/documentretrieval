@@ -1,4 +1,5 @@
 package com.dmeDocuments.dmeDocuments.services
+import jakarta.annotation.PostConstruct
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -6,13 +7,16 @@ import org.json.JSONObject
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
+import java.util.*
 import org.springframework.stereotype.Service
 import java.sql.SQLException
 import java.util.logging.Logger
 import javax.sql.DataSource
+import kotlin.concurrent.scheduleAtFixedRate
 
 @Service
 class AssessmentService {
+
     @Value("\${ial.server.ip}")
     private lateinit var ialIpServer: String
 
@@ -22,14 +26,16 @@ class AssessmentService {
     @Value("\${ial.token.password}")
     private lateinit var tokenPassword:String
 
+
+
     private val logger: Logger = Logger.getLogger(AssessmentService::class.java.name)
     private val client = OkHttpClient()
 
     @Autowired
     private lateinit var dataSource: DataSource
+    @Scheduled(fixedRate = 10 * 60 * 1000) // Run every 2 minutes
 
- //  @Scheduled(fixedRate = 10 * 60 * 1000)
- fun processAssessments(): List<AssessmentData> {
+    fun processAssessments(): List<AssessmentData> {
      val connection = dataSource.connection
      val assessments = mutableListOf<AssessmentData>()
 
@@ -93,7 +99,7 @@ class AssessmentService {
     fun getAssessments(connection: java.sql.Connection): List<AssessmentData> {
         val assessments = mutableListOf<AssessmentData>()
         val query = """
-            SELECT DISTINCT TOP 10 a.assessmentId as assessment_id, i.InvoiceId as invoice_id, 
+            SELECT DISTINCT TOP 2 a.assessmentId as assessment_id, i.InvoiceId as invoice_id, 
             case when i.AdmissionStatus='Out Patient' then 'opd' else 'ipd' end as claimType 
             FROM ClaimAssessment a 
             JOIN claimtreatment t on a.AssessmentId = t.assessmentid 
