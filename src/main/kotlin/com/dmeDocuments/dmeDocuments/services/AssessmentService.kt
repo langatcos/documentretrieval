@@ -99,12 +99,12 @@ class AssessmentService {
             JOIN claimtreatment t on a.AssessmentId = t.assessmentid 
             JOIN claimtreatmentinvoice i on i.treatmentid = t.treatmentid 
             JOIN claimtreatmentinvoiceline l on i.invoiceid = l.invoiceid
-            JOIN indexinfo inx on index9 = CAST(a.assessmentId as varchar(26))
+            JOIN indexinfo inx on index9 = CAST(a.assessmentId as varchar(26)) and index11=CAST(i.InvoiceId as varchar(26)) 
             left Join IassistSubmittedClaims ail on ail.assessmentid=a.assessmentid and ail.InvoiceID =i.invoiceid
             WHERE InvoiceStatus = 'Loaded'
             AND InvoiceEntity IN (116808, 116692, 116748, 116760, 116948, 116858, 116932, 148744)
             AND treatmentDate >= '2023-04-01'
-            and ail.invoiceid is null and ail.invoiceid is null
+            and ail.assessmentId is null and ail.invoiceid is null
             ORDER BY a.assessmentId ASC 
         """.trimIndent()
 
@@ -135,19 +135,19 @@ class AssessmentService {
 
     fun sendRequest(assessmentId: String, invoiceIds: List<String>, claimType: String, token: String, connection: java.sql.Connection) {
         val mediaType = "application/json".toMediaType()
-        val json = """
-            {
-                "assessment_id": "$assessmentId",
-                "invoice_id": ${invoiceIds.map { "\"$it\"" }},
-                "claim_type": "$claimType"
-            }
-        """.trimIndent()
-        val body = json.toRequestBody(mediaType)
+        val requestJson = """
+        {
+            "assessment_id": "$assessmentId",
+            "invoice_id": ${invoiceIds.map { "\"$it\"" }},
+            "claim_type": "$claimType"
+        }
+    """.trimIndent()
+        val body = requestJson.toRequestBody(mediaType)
 
-        logger.info("Sending request with body: $json")
+        logger.info("Sending request with body: $requestJson")
 
         val request = Request.Builder()
-            .url("http://$ialIpServer/iail/initiate")
+            .url("http://192.168.100.79/iail/initiate")
             .post(body)
             .addHeader("Authorization", "JWT $token")
             .addHeader("Content-Type", "application/json")
@@ -161,7 +161,8 @@ class AssessmentService {
 
             val jsonResponse = JSONObject(responseBody)
             if (jsonResponse.has("success")) {
-                insertSubmittedClaim(assessmentId, invoiceIds, connection)
+                logger.info("Success response received for assessmentId $assessmentId")
+                insertSubmittedClaim(assessmentId, invoiceIds, connection, requestJson)
             } else {
                 throw Exception("Claim initiation failed: $responseBody")
             }
@@ -172,22 +173,34 @@ class AssessmentService {
         }
     }
 
-    fun insertSubmittedClaim(assessmentId: String, invoiceIds: List<String>, connection: java.sql.Connection) {
-        val insertQuery = "INSERT INTO IassistSubmittedClaims (AssessmentId, InvoiceId, TimeSend) VALUES (?, ?, getDate())"
+
+
+    fun insertSubmittedClaim(assessmentId: String, invoiceIds: List<String>, connection: java.sql.Connection, requestJson: String) {
+        val insertQuery = "INSERT INTO IassistSubmittedClaims (AssessmentId, InvoiceId, RequestJson, TimeSend) VALUES (?, ?, ?, getDate())"
 
         try {
             connection.autoCommit = false
             val preparedStatement = connection.prepareStatement(insertQuery)
 
+            // Logging the entire batch
+            logger.info("Preparing to insert assessmentId $assessmentId with invoiceIds $invoiceIds and requestJson $requestJson")
+
             for (invoiceId in invoiceIds) {
                 preparedStatement.setString(1, assessmentId)
                 preparedStatement.setString(2, invoiceId)
+                preparedStatement.setString(3, requestJson)
                 preparedStatement.addBatch()
+
+                // Log each entry to be inserted
+                logger.info("Adding to batch: assessmentId=$assessmentId, invoiceId=$invoiceId, requestJson=$requestJson")
             }
 
-            preparedStatement.executeBatch()
+            val result = preparedStatement.executeBatch()
             connection.commit()
             preparedStatement.close()
+
+            // Log the batch execution result
+            logger.info("Batch insert result: ${result.joinToString()}")
 
             logger.info("Inserted assessmentId $assessmentId and invoiceIds $invoiceIds into IassistSubmittedClaims")
         } catch (e: SQLException) {
@@ -198,6 +211,8 @@ class AssessmentService {
             connection.autoCommit = true
         }
     }
+
+
 
     data class AssessmentData(val assessmentId: String, val invoiceId: String, val claimType: String)
 }
