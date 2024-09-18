@@ -10,5 +10,7 @@ data class PreauthInvoice(
     @Column("invoiceId")
     val PreauthInvoiceId:String?,
     @Column("treatmentId")
-    val treatmentId:String?
+    val treatmentId:String?,
+    @Column("preauthStatus")
+    val preauthStatus:String?
 )

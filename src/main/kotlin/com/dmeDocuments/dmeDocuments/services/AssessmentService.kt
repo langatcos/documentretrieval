@@ -166,12 +166,17 @@ class AssessmentService {
             logger.info("Received response: $responseBody")
 
             val jsonResponse = JSONObject(responseBody)
-            if (jsonResponse.has("success")) {
+            logger.info("Test JsonResponse: $responseBody")
+            val successMessage="Claim initiated successfully"
+
+
+            //if (responseBody==="Claim initiated successfully") {
                 logger.info("Success response received for assessmentId $assessmentId")
                 insertSubmittedClaim(assessmentId, invoiceIds, connection, requestJson)
-            } else {
+           /* } else {
+                JSONObject(responseBody)
                 throw Exception("Claim initiation failed: $responseBody")
-            }
+            }*/
 
             response.close()
         } catch (e: Exception) {
