@@ -37,6 +37,8 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 	implementation("org.json:json:20231013")
 	implementation("com.squareup.okhttp3:okhttp:5.0.0-alpha.14")
+	implementation("org.apache.pdfbox:pdfbox:2.0.29")
+
 }
 
 kotlin {

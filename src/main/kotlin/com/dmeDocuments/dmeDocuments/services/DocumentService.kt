@@ -5,6 +5,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.XML
+import org.json.JSONObject
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
 import org.springframework.web.bind.annotation.CrossOrigin
@@ -15,7 +18,7 @@ import java.io.File
 import java.util.Base64
 
 //@RestController
-@CrossOrigin
+//@CrossOrigin
 class DocumentService(
     @Value("\${dme.soap.service.url}") private val soapServiceUrl: String
 ) {
@@ -33,14 +36,13 @@ class DocumentService(
 
     ): String {
 
-
       //  val filePath:String ="C:\\Users\\cosmas.lagat\\Documents\\Occupation List.xlsx"
         logger.info("Received Request to Add Document from file path: $filePath")
         val document = File(filePath).readBytes()
 
 
         val documentBase64 = Base64.getEncoder().encodeToString(document)
-        logger.info("Base 64 Byte Array: $documentBase64")
+     //   logger.info("Base 64 Byte Array: $documentBase64")
 
         val soapRequestXML = """
             <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ns="http://services.activus.com/dme/messagecontracts/2010/02" xmlns:ns1="http://services.activus.com/dme/messagecontracts/2010/06" xmlns:ns2="http://services.activus.com/dme/datacontracts/2010/06" xmlns:ns3="http://services.activus.com/dme/datacontracts/2010/07">
@@ -60,7 +62,7 @@ class DocumentService(
                                     <!--Optional:-->
                                     <ns3:IndexName>POLICY NUMBER</ns3:IndexName>
                                     <!--Optional:-->
-                                    <ns3:Data>JPR112344</ns3:Data>
+                                    <ns3:Data>JPR1112344</ns3:Data>
                                     <!--Optional:-->
                                 </ns3:Act_DMEIndex>
                                 <ns3:Act_DMEIndex>
@@ -81,8 +83,17 @@ class DocumentService(
                                     <ns3:Data>2024-09-16</ns3:Data>
                                     <!--Optional:-->
                                 </ns3:Act_DMEIndex>
+                                <ns3:Act_DMEIndex>
+                                    <!--Optional:-->
+                                    <ns3:IndexId>4</ns3:IndexId>
+                                    <!--Optional:-->
+                                    <ns3:IndexName>COMMENT</ns3:IndexName>
+                                    <!--Optional:-->
+                                    <ns3:Data>Comment Test</ns3:Data>
+                                    <!--Optional:-->
+                                </ns3:Act_DMEIndex>
                             </ns2:DMEIndexList>
-                            <ns2:Cabinet>1</ns2:Cabinet>
+                            <ns2:Cabinet>4</ns2:Cabinet>
                             <ns2:StartQueue>Distribution</ns2:StartQueue>
                             <ns2:Priority>B</ns2:Priority>
                         </ns1:AddDocumentReq>
@@ -103,9 +114,50 @@ class DocumentService(
 
         val response = client.newCall(request).execute()
         val soapResponseXML = response.body?.string() ?: ""
+        logger.info("Response: $soapResponseXML")
+        val xmlStart = soapResponseXML.indexOf("<s:Envelope")
+        val xmlEnd = soapResponseXML.indexOf("</s:Envelope>") + "</s:Envelope>".length
+
+        val extractedXML = if (xmlStart != -1 && xmlEnd != -1) {
+            soapResponseXML.substring(xmlStart, xmlEnd)
+        } else {
+            ""
+        }
+
+        if (extractedXML.isNotEmpty()) {
+            val jsonObject = XML.toJSONObject(extractedXML)
+            val jsonObjectString = jsonObject.toString(4)
+            val successMsg = jsonObject
+                .getJSONObject("s:Envelope")
+                .getJSONObject("s:Body")
+                .getJSONObject("AddDocumentResponseMessage")
+                .getJSONObject("AddDocumentResp")
+                .getJSONObject("b:ActServiceResult")
+                .getBoolean("c:Success")
+
+            val documentReference = jsonObject
+                .getJSONObject("s:Envelope")
+                .getJSONObject("s:Body")
+                .getJSONObject("AddDocumentResponseMessage")
+                .getJSONObject("AddDocumentResp")
+                .getInt("b:DocumentReference")
+
+            val resultArray = JSONArray()
+            if(successMsg){
+                val resultObject = JSONObject()
+                resultObject.put("documentReference", documentReference)
+                resultObject.put("success", successMsg)
+                resultArray.put(resultObject)
+            }
+
+        //  logger.info("$resultArray")
 
 
-        logger.info("SOAP Response: $soapResponseXML")
+            logger.info("Document Reference: $documentReference and Message is $successMsg")
+        } else {
+            logger.info("No valid XML found in the response.")
+        }
+        //logger.info("SOAP Response: $cleanedXML")
         return soapResponseXML
     }
 }
