@@ -29,7 +29,8 @@ dependencies {
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("org.springframework:spring-context-support:5.3.15")
-
+	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.7.3")
 	runtimeOnly("com.microsoft.sqlserver:mssql-jdbc")
 	providedRuntime("org.springframework.boot:spring-boot-starter-tomcat")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -37,7 +38,10 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 	implementation("org.json:json:20231013")
 	implementation("com.squareup.okhttp3:okhttp:5.0.0-alpha.14")
+	implementation("com.squareup.okhttp3:okhttp-urlconnection:5.0.0-alpha.14")
+
 	implementation("org.apache.pdfbox:pdfbox:2.0.29")
+
 
 }
 

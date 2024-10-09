@@ -3,6 +3,7 @@ import jakarta.annotation.PostConstruct
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONException
 import org.json.JSONObject
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
@@ -12,7 +13,8 @@ import org.springframework.stereotype.Service
 import java.sql.SQLException
 import java.util.logging.Logger
 import javax.sql.DataSource
-import kotlin.concurrent.scheduleAtFixedRate
+
+import java.util.concurrent.TimeUnit
 
 @Service
 class AssessmentService {
@@ -29,7 +31,11 @@ class AssessmentService {
 
 
     private val logger: Logger = Logger.getLogger(AssessmentService::class.java.name)
-    private val client = OkHttpClient()
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(60, TimeUnit.SECONDS) // Set connection timeout
+        .writeTimeout(60, TimeUnit.SECONDS)   // Set write timeout
+        .readTimeout(60, TimeUnit.SECONDS)    // Set read timeout
+        .build()
 
     @Autowired
     private lateinit var dataSource: DataSource
@@ -47,6 +53,7 @@ class AssessmentService {
          logger.info("Retrieved assessments: $assessmentsGroupedById")
 
          val token = retrieveToken()
+
          for ((assessmentId, invoices) in assessmentsGroupedById) {
              val invoiceIds = invoices.map { it.invoiceId }
              val claimType = invoices.first().claimType
@@ -73,7 +80,7 @@ class AssessmentService {
         val body = json.toRequestBody(mediaType)
 
         val request = Request.Builder()
-            .url("http://$ialIpServer/iail/auth")
+            .url("https://$ialIpServer/iail/auth")
             .post(body)
             .addHeader("Content-Type", "application/json")
             .build()
@@ -82,7 +89,10 @@ class AssessmentService {
         val responseBody = response.body?.string()
         val token = parseTokenFromResponse(responseBody)
 
+
+
         response.close()
+
 
         return token ?: throw IllegalStateException("Token not retrieved")
     }
@@ -96,22 +106,11 @@ class AssessmentService {
         }
     }
 
+
     fun getAssessments(connection: java.sql.Connection): List<AssessmentData> {
         val assessments = mutableListOf<AssessmentData>()
         val query = """
-            SELECT DISTINCT TOP 2 a.assessmentId as assessment_id, i.InvoiceId as invoice_id, 
-            case when i.AdmissionStatus='Out Patient' then 'opd' else 'ipd' end as claimType 
-            FROM ClaimAssessment a 
-            JOIN claimtreatment t on a.AssessmentId = t.assessmentid 
-            JOIN claimtreatmentinvoice i on i.treatmentid = t.treatmentid 
-            JOIN claimtreatmentinvoiceline l on i.invoiceid = l.invoiceid
-            JOIN indexinfo inx on index9 = CAST(a.assessmentId as varchar(26)) and index11=CAST(i.InvoiceId as varchar(26)) 
-            left Join IassistSubmittedClaims ail on ail.assessmentid=a.assessmentid and ail.InvoiceID =i.invoiceid
-            WHERE InvoiceStatus = 'Loaded'
-            AND InvoiceEntity IN (116808, 116692, 116748, 116760, 116948, 116858, 116932, 148744)
-            AND treatmentDate >= '2023-04-01'
-            and ail.assessmentId is null and ail.invoiceid is null
-            ORDER BY a.assessmentId ASC 
+            SELECT * from IassistRetrievedClaims 
         """.trimIndent()
 
         logger.info("Executing SQL query: $query")
@@ -141,48 +140,63 @@ class AssessmentService {
 
     fun sendRequest(assessmentId: String, invoiceIds: List<String>, claimType: String, token: String, connection: java.sql.Connection) {
         val mediaType = "application/json".toMediaType()
+
+
+
         val requestJson = """
         {
             "assessment_id": "$assessmentId",
-            "invoice_id": ${invoiceIds.map { "\"$it\"" }},
+            "invoice_id": [${invoiceIds.joinToString { "\"$it\"" }}],
             "claim_type": "$claimType"
         }
     """.trimIndent()
+
+
         val body = requestJson.toRequestBody(mediaType)
 
         logger.info("Sending request with body: $requestJson")
 
         val request = Request.Builder()
-            .url("http://$ialIpServer/iail/initiate")
+            .url("https://$ialIpServer/iail/initiate")
             .post(body)
             .addHeader("Authorization", "JWT $token")
             .addHeader("Content-Type", "application/json")
             .build()
-
         try {
             val response = client.newCall(request).execute()
             val responseBody = response.body?.string()
 
             logger.info("Received response: $responseBody")
 
+            if (responseBody.isNullOrEmpty()) {
+                logger.severe("Empty response body")
+                throw Exception("Empty response from server")
+            }
+
+        try {
             val jsonResponse = JSONObject(responseBody)
-            logger.info("Test JsonResponse: $responseBody")
-            val successMessage="Claim initiated successfully"
+            val iassistCaseId = jsonResponse.optString("iassist_case_id", "Unknown ID")
+            val message = jsonResponse.optString("message", "No message provided")
 
+            logger.info("Parsed iassist_case_id: $iassistCaseId")
+            logger.info("Parsed message: $message")
 
-            //if (responseBody==="Claim initiated successfully") {
+            if (message == "Claim initiated successfully") {
                 logger.info("Success response received for assessmentId $assessmentId")
                 insertSubmittedClaim(assessmentId, invoiceIds, connection, requestJson)
-           /* } else {
-                JSONObject(responseBody)
-                throw Exception("Claim initiation failed: $responseBody")
-            }*/
-
+            } else {
+                throw Exception("Claim initiation failed: $message")
+            }
+        } catch (jsonException: JSONException) {
+            logger.severe("Error parsing JSON response: ${jsonException.message}")
+            throw Exception("Invalid JSON response format")
+        } finally {
             response.close()
-        } catch (e: Exception) {
-            logger.severe("Error sending request: ${e.message}")
         }
+    } catch (e: Exception) {
+        logger.severe("Error sending request: ${e.message}")
     }
+}
 
     fun insertSubmittedClaim(assessmentId: String, invoiceIds: List<String>, connection: java.sql.Connection, requestJson: String) {
         val insertQuery = "INSERT INTO IassistSubmittedClaims (AssessmentId, InvoiceId, RequestJson, TimeSend) VALUES (?, ?, ?, getDate())"
